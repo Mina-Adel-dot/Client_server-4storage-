@@ -1,0 +1,223 @@
+"This system is a distributed file storage architecture where the client communicates only with a main server. The main server acts as a coordinator that splits uploaded files into four chunks and distributes them across multiple storage nodes. Each storage node is responsible only for storing and retrieving its chunk. When a client requests a file, the main server fetches all chunks, reconstructs the original file, and sends it back to the client. This design improves scalability, modularity, and resembles real-world distributed file systems."
+
+Client -> Server : Send File
+Server -> Server : Split File
+Server -> Storage1 : Save Chunk 1
+Server -> Storage2 : Save Chunk 2
+Server -> Storage3 : Save Chunk 3
+Server -> Storage4 : Save Chunk 4
+
+Client -> Server : Request File
+Server -> Storage1 : Get Chunk 1
+Server -> Storage2 : Get Chunk 2
+Server -> Storage3 : Get Chunk 3
+Server -> Storage4 : Get Chunk 4
+Server -> Server : Merge Chunks
+Server -> Client : Send File
+
+
+##Chunk size can be equal or dynamic##
+
+##Maintain chunk order using metadata##
+
+##Use file ID instead of file name for safety##
+
+##Handle partial failures (missing chunk)##
+
+
+------------------------------------Client Upload-----------------------------
+User Input: UPLOAD
+   ↓
+client.send("UPLOAD")
+   ↓
+send filename length → filename → filesize
+   ↓
+read file in chunks (4096 bytes)
+   ↓
+send file stream to Main Server
+..........Key Code...............
+action = input()
+
+client.send(action.ljust(10))
+
+client.send(filename_len)
+
+client.send(filesize)
+
+client.sendall(data)
+
+
+---------------------------------- Main Server Upload---------------------------
+
+Receive UPLOAD command
+   ↓
+Receive filename + filesize
+   ↓
+Calculate part_size = ceil(filesize / 4)
+   ↓
+FOR each storage node (1 → 4):
+    ├─ connect_storage()
+    ├─ send STORE command
+    ├─ send filename + part_size
+    └─ stream part from client → storage
+........................Key Code................................
+
+command = recv_exact(conn, 10)
+
+part_size = math.ceil(filesize / 4)
+
+for i, (ip, port) in enumerate(STORAGE_NODES):
+
+st.send(b"STORE")
+
+
+------------------------------------Storage Node Store-------------------------------
+
+Receive STORE command
+   ↓
+Receive filename
+   ↓
+Receive part_size
+   ↓
+Receive file bytes
+   ↓
+Write chunk to local folder
+................................Key Code...........................
+cmd = recv_exact(conn, 10)
+
+if cmd == "STORE":
+
+with open(path, "wb") as f:
+
+
+-----------------------------------------------------Client Download---------------------
+
+User Input: GET
+   ↓
+Send GET command
+   ↓
+Send filename
+   ↓
+Wait for FOUND / NOFILE
+   ↓
+Receive filesize
+   ↓
+Receive file stream
+   ↓
+Save file locally
+
+---------------------------------------Main Server Download-----------------------------
+
+Receive GET command
+   ↓
+FOR each storage node:
+    ├─ send FETCH command
+    ├─ receive FOUND / NOFILE
+    └─ receive part data
+   ↓
+Merge parts in memory (full_data)
+   ↓
+Send FOUND + filesize + data to client
+
+..................................Key Code.....................................
+elif command == "GET":
+
+st.send(b"FETCH")
+
+full_data += chunk
+
+#######################################Full System Architecture#####################
+        ┌───────────┐
+        │  Client   │
+        └─────┬─────┘
+              │
+      Upload / GET
+              │
+        ┌─────▼─────┐
+        │ Main      │
+        │ Server    │
+        └─────┬─────┘
+      ┌───────┼────────┬────────────────┐
+      ▼         ▼          ▼                    ▼
+┌────────┐┌────────┐ ┌────────┐     ┌────────┐
+│Storage │    │Storage │   │Storage │        │Storage │
+│ Node 1 │    │ Node 2 │   │ Node 3 │        │ Node 4 │
+└────────┘└────────┘ └────────┘     └────────┘
+
+
+#################################UML Class Diagram#########################
+
+
+
+
++------------------+
+|     Client       |
++------------------+
+| - socket         |
+| - server_ip      |
+| - server_port    |
++------------------+
+| + uploadFile()   |
+| + getFile()      |
+| + sendCommand()  |
+| + receiveFile()  |
++------------------+
+
+            │ connects
+            ▼
+
++---------------------------+
+|        MainServer         |
++---------------------------+
+| - server_socket           |
+| - storage_nodes[]         |
++---------------------------+
+| + handleUpload()          |
+| + handleGet()             |
+| + splitFile()             |
+| + mergeFiles()            |
+| + connectStorage()        |
++---------------------------+
+
+            │ manages
+            ▼
+
++---------------------------+
+|        StorageNode        |
++---------------------------+
+| - folder_path             |
+| - node_socket             |
++---------------------------+
+| + storeChunk()            |
+| + fetchChunk()            |
+| + fileExists()            |
++---------------------------+
+
+##############################UML Sequence Diagram######################
+
+Client      MainServer      Storage1   Storage2   Storage3   Storage4
+  |             |               |          |          |          |
+  |--UPLOAD---->|               |          |          |          |
+  |--metadata-->|               |          |          |          |
+  |--file data->|               |          |          |          |
+  |             |--STORE------->|          |          |          |
+  |             |--STORE------------------>|          |          |
+  |             |--STORE----------------------------->|          |
+  |             |--STORE---------------------------------------->|
+  |             |               |          |          |          |
+
+
+
+##############################Download Sequence######################
+
+Client      MainServer      Storage1   Storage2   Storage3   Storage4
+  |             |               |          |          |          |
+  |---GET------>|               |          |          |          |
+  |             |--FETCH------->|          |          |          |
+  |             |--FETCH------------------>|          |          |
+  |             |--FETCH----------------------------->|          |
+  |             |--FETCH---------------------------------------->|
+  |             |<--chunks-----|<---------|<---------|<---------|
+  |<--file------|               |          |          |          |
+
+
