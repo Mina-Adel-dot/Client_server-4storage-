@@ -1,1 +1,1 @@
-# Client_server-4storage-
+"This system is a distributed file storage architecture where the client communicates only with a main server. The main server acts as a coordinator that splits uploaded files into four chunks and distributes them across multiple storage nodes. Each storage node is responsible only for storing and retrieving its chunk. When a client requests a file, the main server fetches all chunks, reconstructs the original file, and sends it back to the client. This design improves scalability, modularity, and resembles real-world distributed file systems.
